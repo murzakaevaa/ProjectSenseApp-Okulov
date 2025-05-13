@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <SurfaceView
+        android:id="@+id/previewSurface"
+        android:layout_width="match_parent"
+        android:layout_height="240dp"
+        android:layout_gravity="center" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="16dp"
+        android:text="Приложите палец к камере"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/pulseRateText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="16dp"
+        android:text="-- уд/мин"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="8dp"
+        android:text="Начать измерение" />
+
+    <Button
+        android:id="@+id/flashButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="8dp"
+        android:text="Включить подсветку" />
+
+    <Button
+        android:id="@+id/manualPulseButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="8dp"
+        android:text="Отметить удар пульса" />
+    <TextView
+        android:id="@+id/manualPulseText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="-- уд/мин (ручной)"
+        android:textSize="18sp"
+        android:layout_marginTop="16dp" />
+    <TextView
+        android:id="@+id/comparisonText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Сравнение: --"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp"/>
+
+</LinearLayout> 
