@@ -32,10 +32,49 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.widget.ImageView
+import android.view.LayoutInflater
+import android.widget.EditText
+import java.io.ObjectOutputStream
+import java.io.ObjectInputStream
 
+import java.io.FileOutputStream
+import java.io.FileInputStream
 
 @SuppressLint("ClickableViewAccessibility", "Deprecated")
 class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
+    private val USER_DATA_FILE = "user_heart_data.dat"
+    private var userName = "Гость"
+    private var userHeartData = mutableListOf<HeartRateMeasurement>()
+
+    // Класс для хранения данных измерения
+    data class HeartRateMeasurement(
+        val timestamp: Long = System.currentTimeMillis(),
+        val heartRate: Int,
+        val confidence: Double,
+        val signalQuality: Double,
+        val redValues: List<Double> = emptyList()
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Загружаем сохраненные данные
+        loadUserData()
+
+        // Если имя не сохранено, запрашиваем
+        if (userName == "Гость") {
+            askForUserName()
+        } else {
+            binding.userNameText.text = "Пользователь: $userName"
+        }
     private val TAG = "HeartRateMonitor"
     private val REQUEST_CAMERA_PERMISSION = 100
     private val REQUEST_STORAGE_PERMISSION = 101
@@ -448,6 +487,7 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         }
     }
 
+
     /**
      * Оценка качества сигнала на основе вариации последних значений
      */
@@ -479,9 +519,162 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         }
     }
 
+        // Функция для запроса имени пользователя
+        private fun askForUserName() {
+            val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_user_name, null)
+            val editText = dialogView.findViewById<EditText>(R.id.userNameEditText)
+
+            AlertDialog.Builder(this)
+                .setTitle("Введите ваше имя")
+                .setView(dialogView)
+                .setPositiveButton("Сохранить") { _, _ ->
+                    userName = editText.text.toString().takeIf { it.isNotBlank() } ?: "Гость"
+                    binding.userNameText.text = "Пользователь: $userName"
+                    saveUserData()
+                }
+                .setCancelable(false)
+                .show()
+        }
+
+        // Функция для отрисовки графика пульса
+        private fun drawHeartRateGraph(values: List<Double>, imageView: ImageView) {
+            if (values.size < 2) return
+
+            val width = imageView.width
+            val height = imageView.height
+            if (width <= 0 || height <= 0) return
+
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+
+            // Рисуем фон
+            val backgroundPaint = Paint().apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), backgroundPaint)
+
+            // Настраиваем кисть для графика
+            val graphPaint = Paint().apply {
+                color = Color.RED
+                strokeWidth = 3f
+                style = Paint.Style.STROKE
+                isAntiAlias = true
+            }
+
+            // Нормализуем данные
+            val maxValue = values.maxOrNull() ?: 1.0
+            val minValue = values.minOrNull() ?: 0.0
+            val range = maxValue - minValue
+            if (range <= 0) return
+
+            // Рисуем график
+            val path = Path()
+            val stepX = width.toFloat() / (values.size - 1)
+
+            values.forEachIndexed { index, value ->
+                val x = index * stepX
+                val y = height - ((value - minValue) / range * height * 0.8f).toFloat() - height * 0.1f
+
+                if (index == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
+                }
+            }
+
+            canvas.drawPath(path, graphPaint)
+            imageView.setImageBitmap(bitmap)
+        }
+
+        // Сохраняем измерение
+        private fun saveMeasurement(heartRate: Int) {
+            val measurement = HeartRateMeasurement(
+                heartRate = heartRate,
+                confidence = heartRateConfidence,
+                signalQuality = signalQuality,
+                redValues = redChannelValues.takeLast(100) // Сохраняем последние 100 значений
+            )
+
+            userHeartData.add(measurement)
+            saveUserData()
+
+            // Обновляем график
+            drawHeartRateGraph(measurement.redValues, binding.heartRateGraph)
+
+            // Добавляем запись в историю
+            val timeString = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(measurement.timestamp))
+            binding.measurementHistory.append("$timeString - ${measurement.heartRate} уд/мин\n")
+        }
+
+        // Сохраняем данные пользователя
+        private fun saveUserData() {
+            try {
+                val file = File(filesDir, USER_DATA_FILE)
+                ObjectOutputStream(FileOutputStream(file)).use { oos ->
+                    oos.writeObject(userName)
+                    oos.writeObject(userHeartData)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка сохранения данных: ${e.message}")
+            }
+        }
+
+        // Загружаем данные пользователя
+        private fun loadUserData() {
+            try {
+                val file = File(filesDir, USER_DATA_FILE)
+                if (file.exists()) {
+                    ObjectInputStream(FileInputStream(file)).use { ois ->
+                        userName = ois.readObject() as? String ?: "Гость"
+                        @Suppress("UNCHECKED_CAST")
+                        userHeartData = (ois.readObject() as? MutableList<HeartRateMeasurement>) ?: mutableListOf()
+                    }
+
+                    // Восстанавливаем последнее измерение
+                    userHeartData.lastOrNull()?.let { lastMeasurement ->
+                        lastValidHeartRate = lastMeasurement.heartRate
+                        heartRateConfidence = lastMeasurement.confidence
+                        drawHeartRateGraph(lastMeasurement.redValues, binding.heartRateGraph)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка загрузки данных: ${e.message}")
+            }
+        }
+
+        // В методе calculateHeartRate() заменяем вывод на:
+        private fun calculateHeartRate() {
+            if (redChannelValues.size < MOVING_WINDOW_SIZE * 2) {
+                runOnUiThread {
+                    binding.pulseRateText.text = "Недостаточно данных"
+                    Toast.makeText(this, "Недостаточно данных для определения пульса", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+
+            val heartRate = getHeartRateFromPeaks(redChannelValues, timeValues)
+
+            runOnUiThread {
+                if (heartRate > 0) {
+                    lastValidHeartRate = heartRate
+                    heartRateConfidence = minOf(1.0, signalQuality * 1.5)
+                    binding.pulseRateText.text = "$heartRate уд/мин"
+                    saveMeasurement(heartRate) // Сохраняем измерение
+                } else {
+                    binding.pulseRateText.text = "$lastValidHeartRate уд/мин (примерно)"
+                    Toast.makeText(this, "Точное определение пульса не удалось", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
     /**
      * Функция для обновления значения пульса в реальном времени с упрощенным алгоритмом
      */
+
+
+
+
     private fun updateRealtimeHeartRate() {
         // Берем только последние данные для анализа в реальном времени
         val dataSize = redChannelValues.size
